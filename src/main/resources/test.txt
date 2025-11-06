@@ -1,0 +1,16 @@
+battle() #
+brojElixira elixir = 5;
+brojElixira elixir2 = 0;
+
+cycle(brojElixira i = 0 ; i < elixir ; i++) #
+    elixir2 = elixir2 + i;
+$
+
+leader(elixir2 >= 3) #
+ispisiKarticu("Ima vise od 3");
+$
+member #
+ispisiKarticu("Ima manje od 3");
+$
+
+$

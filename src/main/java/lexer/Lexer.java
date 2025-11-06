@@ -13,19 +13,33 @@ public class Lexer {
     private final List<Token> tokens = new ArrayList<>();
 
     private static final Map<String, TokenType> KEYWORDS = Map.ofEntries(
-            Map.entry("int", TokenType.INT),
-            Map.entry("begin", TokenType.BEGIN),
-            Map.entry("end", TokenType.END),
-            Map.entry("function", TokenType.FUNCTION),
-            Map.entry("if", TokenType.IF),
-            Map.entry("or", TokenType.OR),
-            Map.entry("else", TokenType.ELSE),
-            Map.entry("for", TokenType.FOR),
-            Map.entry("goes", TokenType.GOES),
-            Map.entry("from", TokenType.FROM),
-            Map.entry("to", TokenType.TO),
-            Map.entry("call", TokenType.CALL),
-            Map.entry("return", TokenType.RETURN)
+
+            // --- Tipovi podataka ---
+            Map.entry("brojElixira", TokenType.BROJ_ELIXIRA),
+            Map.entry("slovoKartice", TokenType.SLOVO_KARTICE),
+            Map.entry("doubleElixir", TokenType.DOUBLE_ELIXIR),
+            Map.entry("imeKartice", TokenType.IME_KARTICE),
+
+            // --- Glavna funkcija ---
+            Map.entry("battle", TokenType.BATTLE),
+
+            // --- Povratna vrednost funkcije ---
+            Map.entry("bezElixira", TokenType.BEZ_ELIXIRA),
+
+            // --- Built-in funkcije ---
+            Map.entry("ucitajKarticu", TokenType.UCITAJ_KARTICU),
+            Map.entry("ispisiKarticu", TokenType.ISPISI_KARTICU),
+
+            // --- Uslovne naredbe ---
+            Map.entry("leader", TokenType.LEADER),   // if
+            Map.entry("elder", TokenType.ELDER),     // else if
+            Map.entry("member", TokenType.MEMBER),   // else
+
+            // --- For / cycle ---
+            Map.entry("cycle", TokenType.CYCLE),
+
+            // --- Return ---
+            Map.entry("krajBorbe", TokenType.KRAJ_BORBE)
     );
 
     public Lexer(String source) {
@@ -46,32 +60,79 @@ public class Lexer {
         char c = sc.advance();
 
         switch (c) {
+            // --- zagrade ---
             case '(' -> add(TokenType.LPAREN);
             case ')' -> add(TokenType.RPAREN);
             case '[' -> add(TokenType.LBRACKET);
             case ']' -> add(TokenType.RBRACKET);
-            case ',' -> add(TokenType.SEPARATOR_COMMA);
-            case ':' -> add(TokenType.TYPE_COLON);
-            case '+' -> add(TokenType.ADD);
-            case '-' -> add(sc.match('>') ? TokenType.ASSIGN : TokenType.SUBTRACT);
+
+            // --- blokovi i ternarni ---
+            case '#' -> add(TokenType.BLOCK_START);          // početak bloka
+            case '$' -> add(TokenType.BLOCK_END);            // kraj bloka
+            case '{' -> add(TokenType.LBRACE_TERNARY);       // ternarni otvaranje
+            case '}' -> add(TokenType.RBRACE_TERNARY);       // ternarni zatvaranje
+            case '?' -> add(TokenType.TERNARY_QMARK);
+            case ':' -> add(TokenType.TERNARY_COLON);
+
+            // --- separatori / dodela ---
+            case ',' -> add(TokenType.COMMA);
+            case ';' -> add(TokenType.SEMICOLON);
+            case '=' -> add(sc.match('=') ? TokenType.EQ : TokenType.ASSIGN); // == ili =
+
+            // --- aritmetički ---
+            case '+' -> {
+                if (sc.match('+')) add(TokenType.INCREMENT);
+                else if (sc.match('=')) add(TokenType.PLUS_ASSIGN);
+                else add(TokenType.ADD);
+            }
+
+            case '-' -> {
+                if (sc.match('-')) add(TokenType.DECREMENT);
+                else if (sc.match('=')) add(TokenType.MINUS_ASSIGN);
+                else add(TokenType.SUB);
+            }
+
             case '*' -> add(TokenType.MULTIPLY);
             case '/' -> add(TokenType.DIVIDE);
             case '%' -> add(TokenType.PERCENT);
+
+            // --- relacioni ---
             case '<' -> add(sc.match('=') ? TokenType.LE : TokenType.LT);
             case '>' -> add(sc.match('=') ? TokenType.GE : TokenType.GT);
-            case '=' -> add(TokenType.EQ);
-            case '!' -> {
-                if (sc.match('=')) add(TokenType.NEQ);
-                else throw error("Unexpected '!'");
+
+            // --- logički ---
+            case '&' -> add(TokenType.LOG_AND);
+            case '|' -> add(TokenType.LOG_OR);
+            case '!' -> add(sc.match('=') ? TokenType.NEQ : TokenType.LOG_NOT);
+
+            case '"' -> {
+                add(TokenType.QUOTE);
+
             }
+
+            case '\'' -> {
+                add(TokenType.APOSTROPHE);
+
+            }
+
+            // --- novi red / beline ---
             case '\n' -> tokens.add(new Token(
                     TokenType.NEWLINE, "\n", null, sc.getStartLine(), sc.getStartCol(), sc.getStartCol()
             ));
-            case ' ', '\r', '\t' -> {}
+            case ' ', '\r', '\t' -> { /* skip */ }
+
+
+
             default -> {
-                if (Character.isDigit(c)) number();
-                else if (isIdentStart(c)) identifier();
-                else throw error("Unexpected character");
+                if (Character.isDigit(c)) {
+                    number();     // podrži i double (npr. 20.00)
+                } else if (isIdentStart(c)) {
+                    identifier(); // prepoznaj keywords (battle, leader, elder, member, cycle, krajBorbe,
+                    // brojElixira, slovoKartice, doubleElixir, imeKartice, ucitajKarticu, ispisiKarticu, bezElixira)
+                    // + heks (HB4C) i oktal (O43) literale po potrebi
+                } else {
+                    throw error("Unexpected character: '" + c + "'");
+                }
             }
         }
     }
