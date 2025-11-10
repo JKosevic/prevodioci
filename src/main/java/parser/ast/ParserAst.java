@@ -15,9 +15,6 @@ public final class ParserAst {
         this.tokens = tokens;
     }
 
-    // ============================================================
-    // PROGRAM
-    // ============================================================
 
     public Ast.Program parseProgram() {
         boolean hasBattleMain = false;
@@ -37,9 +34,6 @@ public final class ParserAst {
         return new Ast.Program(hasBattleMain, items);
     }
 
-    // ============================================================
-    // FUNCTION
-    // ============================================================
 
     private Ast.FuncDef parseFunction() {
         Token name = consume(TokenType.IDENT, "čekao sam ime funkcije");
@@ -67,10 +61,8 @@ public final class ParserAst {
         return new Ast.FuncDef(name, params, returnType, body);
     }
 
-    // ============================================================
-    // BLOCK (# ...)
-    // ============================================================
 
+    // Block
     private List<Ast.Stmt> parseBlock() {
         consume(TokenType.BLOCK_START, "čekao sam '#'");
 
@@ -83,10 +75,7 @@ public final class ParserAst {
         return stmts;
     }
 
-    // ============================================================
     // STATEMENT
-    // ============================================================
-
     private Ast.Stmt parseStatement() {
         if (match(TokenType.KRAJ_BORBE)) return parseReturn();
         if (match(TokenType.LEADER)) return parseIf();
@@ -99,10 +88,8 @@ public final class ParserAst {
         return parseAssignOrCall();
     }
 
-    // ============================================================
-    // RETURN
-    // ============================================================
 
+    // RETURN
     private Ast.Stmt.Return parseReturn() {
         if (match(TokenType.SEMICOLON)) {
             return new Ast.Stmt.Return(null);
@@ -113,10 +100,8 @@ public final class ParserAst {
         return new Ast.Stmt.Return(expr);
     }
 
-    // ============================================================
-    // IF / ELDER / MEMBER
-    // ============================================================
 
+    // IF / ELDER / MEMBER
     private Ast.Stmt.BeginIf parseIf() {
         consume(TokenType.LPAREN, "čekao sam '('");
         Ast.Expr cond = parseExpression();
@@ -142,10 +127,8 @@ public final class ParserAst {
         return new Ast.Stmt.BeginIf(ifArm, elders, elseBlock);
     }
 
-    // ============================================================
-    // CYCLE
-    // ============================================================
 
+    // CYCLE
     private Ast.Stmt.BeginCycle parseCycle() {
         consume(TokenType.LPAREN, "čekao sam '('");
 
@@ -166,10 +149,8 @@ public final class ParserAst {
         return new Ast.Stmt.BeginCycle(init, cond, step, body);
     }
 
-    // ============================================================
-    // VAR DECL
-    // ============================================================
 
+    // VAR DECL
     private Ast.Stmt.VarDecl parseVarDecl() {
         Ast.Type t = parseType();
 
@@ -192,10 +173,8 @@ public final class ParserAst {
         return new Ast.Stmt.VarDecl(t, dims, names);
     }
 
-    // ============================================================
-    // ASSIGN OR CALL
-    // ============================================================
 
+    // ASSIGN OR CALL
     private Ast.Stmt parseAssignOrCall() {
         Ast.Expr left = parseExpression();
 
@@ -222,10 +201,8 @@ public final class ParserAst {
         return new Ast.Stmt.LValue(name, indices);
     }
 
-    // ============================================================
-    // TYPE
-    // ============================================================
 
+    // TYPE
     private Ast.Type parseType() {
         Token base = null;
         Ast.Type.Kind kind;
@@ -254,10 +231,8 @@ public final class ParserAst {
                 check(TokenType.BEZ_ELIXIRA);
     }
 
-    // ============================================================
-    // EXPRESSIONS — kompletna hijerarhija
-    // ============================================================
 
+    // EXPRESSIONS — kompletna hijerarhija
     private Ast.Expr parseExpression() { return parseTernary(); }
 
     private Ast.Expr parseTernary() {
@@ -398,10 +373,8 @@ public final class ParserAst {
         throw error(peek(), "neočekivan token u izrazu");
     }
 
-    // ============================================================
-    // TOKEN helpers
-    // ============================================================
 
+    // TOKEN helpers
     private boolean match(TokenType... types) {
         for (TokenType t : types) {
             if (check(t)) { advance(); return true; }

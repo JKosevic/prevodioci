@@ -25,19 +25,19 @@ public final class Ast {
 
     public interface TopItem {}
 
-    /** top-level var deklaracija (dozvoljeno ako to želiš u jeziku; možeš ukloniti ako ne treba) */
+
     public static final class TopVarDecl implements TopItem {
         public final Stmt.VarDecl decl;
         public TopVarDecl(Stmt.VarDecl decl) { this.decl = decl; }
     }
 
-    /** top-level izjava (npr. poziv ili dodela) */
+
     public static final class TopStmt implements TopItem {
         public final Stmt stmt;
         public TopStmt(Stmt stmt) { this.stmt = stmt; }
     }
 
-    /** definicija funkcije: @tip@ ime(params) # body $ */
+
     public static final class FuncDef implements TopItem {
         public final Token name;     // IDENT (npr. battle, vracaVeciBroj)
         public final List<Param> params;
@@ -58,7 +58,7 @@ public final class Ast {
         public Param(Token name, Type type) { this.name = name; this.type = type; }
     }
 
-    /** Tip: bazni + rank (broj []), bazni je jedan od: int/double/char/string/void */
+
     public static final class Type {
         public enum Kind { INT, DOUBLE, CHAR, STRING, VOID }
         public final Kind kind;
@@ -72,7 +72,7 @@ public final class Ast {
         }
     }
 
-    // ===== Izrazi =====
+    // Izrazi
     public static abstract class Expr {
         public interface Visitor<R> {
             R visitLiteralInt(LiteralInt e);
@@ -189,7 +189,7 @@ public final class Ast {
         }
         public abstract <R> R accept(Visitor<R> v);
 
-        /** Deklaracija: tip [dims] listaImena ;  (dims opcioni: npr. [N] [M]...) */
+        //Deklaracija: tip [dims] listaImena ;  (dims opcioni: npr. [N] [M]...) */
         public static final class VarDecl extends Stmt {
             public final Type type;            // bazni tip + rank (rank se može + dims kombinovati u semantici)
             public final List<Expr> dims;      // konkretne dimenzije (ako su date eksplicitno pre imena)
@@ -200,14 +200,14 @@ public final class Ast {
             @Override public <R> R accept(Visitor<R> v) { return v.visitVarDecl(this); }
         }
 
-        /** L-value: ime i niz indeksa (0..k) */
+        //L-value: ime i niz indeksa (0..k) */
         public static final class LValue {
             public final Token name;         // IDENT
             public final List<Expr> indices; // može biti prazna lista
             public LValue(Token name, List<Expr> indices) { this.name = name; this.indices = indices; }
         }
 
-        /** Dodela: expr -> lvalue (po tvom primeru) ili lvalue = expr (ako tako želiš). */
+        //Dodela: expr -> lvalue (po tvom primeru) ili lvalue = expr (ako tako želiš). */
         public static final class Assign extends Stmt {
             public final Expr left;  // ono što dodeljujemo (izraz ili poziv)
             public final LValue lvalue;
@@ -215,21 +215,21 @@ public final class Ast {
             @Override public <R> R accept(Visitor<R> v) { return v.visitAssign(this); }
         }
 
-        /** Poziv kao izjava (bez korišćenja rezultata). */
+        //Poziv kao izjava (bez korišćenja rezultata). */
         public static final class CallStmt extends Stmt {
             public final Expr.Call call;
             public CallStmt(Expr.Call call) { this.call = call; }
             @Override public <R> R accept(Visitor<R> v) { return v.visitCallStmt(this); }
         }
 
-        /** krajBorbe [expr] ; — ako je @bezElixira@ onda expr može biti null */
+        //krajBorbe [expr] ; — ako je @bezElixira@ onda expr može biti null */
         public static final class Return extends Stmt {
             public final Expr expr; // može biti null
             public Return(Expr expr) { this.expr = expr; }
             @Override public <R> R accept(Visitor<R> v) { return v.visitReturn(this); }
         }
 
-        /** leader (...) # ... $  [ elder (...) # ... $ ]*  [ member # ... $ ] */
+        //leader (...) # ... $  [ elder (...) # ... $ ]*  [ member # ... $ ] */
         public static final class BeginIf extends Stmt {
             public static final class Arm {
                 public final Expr cond;

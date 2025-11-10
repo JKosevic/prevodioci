@@ -1,16 +1,18 @@
-battle() #
-brojElixira elixir = 5;
-brojElixira elixir2 = 0;
+    battle() #
+    brojElixira elixir = 2;
+    brojElixira elixir2 = 3;
 
-cycle(brojElixira i = 0 ; i < elixir ; i++) #
-    elixir2 = elixir2 + i;
-$
+    cycle(brojElixira i = 0 ; i < elixir ; i++) #
+        elixir2 = elixir2 + 1;
+    $
 
-leader(elixir2 >= 3) #
-ispisiKarticu("Ima vise od 3");
-$
-member #
-ispisiKarticu("Ima manje od 3");
-$
+    leader(elixir2 >= 3) #
+        ispisiKarticu("Ima vise od 3");
+    $
 
-$
+    member #
+        ispisiKarticu("Ima manje od 3");
+    $
+
+    krajBorbe;
+    $

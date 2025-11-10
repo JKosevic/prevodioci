@@ -105,8 +105,8 @@ public class Lexer {
             case '|' -> add(TokenType.LOG_OR);
             case '!' -> add(sc.match('=') ? TokenType.NEQ : TokenType.LOG_NOT);
 
-            case '"' -> add(TokenType.QUOTE);
-            case '\'' -> add(TokenType.APOSTROPHE);
+            case '"' -> stringLiteral();
+            case '\'' -> charLiteral();
 
             // --- AT_TYPE ---
             case '@' -> atType();
@@ -196,4 +196,46 @@ public class Lexer {
         return new RuntimeException("LEXER > " + msg + " at " +
                 sc.getStartLine() + ":" + sc.getStartCol() + " near '" + near + "'");
     }
+    private void stringLiteral() {
+        int line = sc.getStartLine();
+        int col = sc.getStartCol();
+
+        StringBuilder sb = new StringBuilder();
+
+        while (!sc.isAtEnd() && sc.peek() != '"') {
+            sb.append(sc.advance());
+        }
+
+        if (sc.isAtEnd()) throw error("Unterminated string literal");
+
+        sc.advance(); // closing "
+
+        tokens.add(new Token(
+                TokenType.STRING_LIT,
+                sb.toString(),
+                sb.toString(),
+                line, col, sc.getCol() - 1
+        ));
+    }
+    private void charLiteral() {
+        int line = sc.getStartLine();
+        int col = sc.getStartCol();
+
+        if (sc.isAtEnd()) throw error("Unterminated char literal");
+
+        char ch = sc.advance();
+
+        if (sc.peek() != '\'')
+        throw error("Expected closing ' in char literal");
+
+        sc.advance(); // closing '
+
+        tokens.add(new Token(
+                TokenType.CHAR_LIT,
+                String.valueOf(ch),
+                (int) ch,
+                line, col, sc.getCol() - 1
+        ));
+    }
+
 }
