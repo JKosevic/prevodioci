@@ -32,7 +32,7 @@ public enum TokenType {
     CYCLE,             // cycle()
 
     // --- Definicije funkcija ---
-    AT_TYPE,           // @brojElixira@ ili @bezElixira@
+    AT_TYPE,           // @brojElixira@
     BEZ_ELIXIRA,       // bezElixira (void)
 
     // --- Blokovi ---
@@ -91,5 +91,8 @@ public enum TokenType {
 
     // --- Specijalno ---
     NEWLINE,
-    EOF
+    EOF,
+    /// dodati ove stvari u lekser :
+    RETURN
+
 }

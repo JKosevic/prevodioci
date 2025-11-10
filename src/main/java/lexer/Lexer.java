@@ -67,17 +67,17 @@ public class Lexer {
             case ']' -> add(TokenType.RBRACKET);
 
             // --- blokovi i ternarni ---
-            case '#' -> add(TokenType.BLOCK_START);          // početak bloka
-            case '$' -> add(TokenType.BLOCK_END);            // kraj bloka
-            case '{' -> add(TokenType.LBRACE_TERNARY);       // ternarni otvaranje
-            case '}' -> add(TokenType.RBRACE_TERNARY);       // ternarni zatvaranje
+            case '#' -> add(TokenType.BLOCK_START);
+            case '$' -> add(TokenType.BLOCK_END);
+            case '{' -> add(TokenType.LBRACE_TERNARY);
+            case '}' -> add(TokenType.RBRACE_TERNARY);
             case '?' -> add(TokenType.TERNARY_QMARK);
             case ':' -> add(TokenType.TERNARY_COLON);
 
             // --- separatori / dodela ---
             case ',' -> add(TokenType.COMMA);
             case ';' -> add(TokenType.SEMICOLON);
-            case '=' -> add(sc.match('=') ? TokenType.EQ : TokenType.ASSIGN); // == ili =
+            case '=' -> add(sc.match('=') ? TokenType.EQ : TokenType.ASSIGN);
 
             // --- aritmetički ---
             case '+' -> {
@@ -105,31 +105,25 @@ public class Lexer {
             case '|' -> add(TokenType.LOG_OR);
             case '!' -> add(sc.match('=') ? TokenType.NEQ : TokenType.LOG_NOT);
 
-            case '"' -> {
-                add(TokenType.QUOTE);
+            case '"' -> add(TokenType.QUOTE);
+            case '\'' -> add(TokenType.APOSTROPHE);
 
-            }
-
-            case '\'' -> {
-                add(TokenType.APOSTROPHE);
-
-            }
+            // --- AT_TYPE ---
+            case '@' -> atType();
 
             // --- novi red / beline ---
             case '\n' -> tokens.add(new Token(
-                    TokenType.NEWLINE, "\n", null, sc.getStartLine(), sc.getStartCol(), sc.getStartCol()
+                    TokenType.NEWLINE, "\n", null,
+                    sc.getStartLine(), sc.getStartCol(), sc.getStartCol()
             ));
+
             case ' ', '\r', '\t' -> { /* skip */ }
-
-
 
             default -> {
                 if (Character.isDigit(c)) {
-                    number();     // podrži i double (npr. 20.00)
+                    number();
                 } else if (isIdentStart(c)) {
-                    identifier(); // prepoznaj keywords (battle, leader, elder, member, cycle, krajBorbe,
-                    // brojElixira, slovoKartice, doubleElixir, imeKartice, ucitajKarticu, ispisiKarticu, bezElixira)
-                    // + heks (HB4C) i oktal (O43) literale po potrebi
+                    identifier();
                 } else {
                     throw error("Unexpected character: '" + c + "'");
                 }
@@ -137,11 +131,35 @@ public class Lexer {
         }
     }
 
+    // --- @type@ ---
+    private void atType() {
+        int line = sc.getStartLine();
+        int col = sc.getStartCol();
+
+        if (!isIdentStart(sc.peek())) {
+            throw error("Expected identifier after '@'");
+        }
+
+        sc.advance();
+
+        while (isIdentPart(sc.peek())) sc.advance();
+
+        if (sc.peek() != '@') {
+            throw error("Expected closing '@' in @type@");
+        }
+
+        sc.advance();
+
+        String text = source.substring(sc.getStartIdx(), sc.getCur());
+
+        tokens.add(new Token(TokenType.AT_TYPE, text, null,  line, col, sc.getCol() - 1));
+    }
+
     private void number() {
         while (Character.isDigit(sc.peek())) sc.advance();
         String text = source.substring(sc.getStartIdx(), sc.getCur());
-        char nextChar = sc.peek();
-        if (Character.isAlphabetic(nextChar)) {
+        char next = sc.peek();
+        if (Character.isAlphabetic(next)) {
             throw error("Error: Character in int literal");
         }
         addLiteralInt(text);
@@ -175,6 +193,7 @@ public class Lexer {
 
     private RuntimeException error(String msg) {
         String near = source.substring(sc.getStartIdx(), Math.min(sc.getCur(), source.length()));
-        return new RuntimeException("LEXER > " + msg + " at " + sc.getStartLine() + ":" + sc.getStartCol() + " near '" + near + "'");
+        return new RuntimeException("LEXER > " + msg + " at " +
+                sc.getStartLine() + ":" + sc.getStartCol() + " near '" + near + "'");
     }
 }
