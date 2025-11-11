@@ -16,59 +16,111 @@ public final class ParserAst {
     }
 
 
+    // PROGRAM -> FUN_DECL* EOF
     public Ast.Program parseProgram() {
         boolean hasBattleMain = false;
         List<Ast.TopItem> items = new ArrayList<>();
 
+        // dozvoli triviju na početku
+        skipTrivia();
+
+        // čitaj funkcije dok ne stignemo do kraja
         while (!isAtEnd()) {
-            if (match(TokenType.BATTLE)) {
-                items.add(parseFunction());
-                hasBattleMain = true;
-            } else if (checkTypeKeyword()) {
-                items.add(new Ast.TopVarDecl(parseVarDecl()));
+            // ako smo stvarno na EOF-u – kraj
+            if (check(TokenType.EOF)) break;
+
+            if (check(TokenType.BATTLE) || check(TokenType.AT_TYPE)) {
+                Ast.FuncDef f = parseFunction();
+                if ("battle".equals(f.name.lexeme)) hasBattleMain = true;
+                items.add(f);
             } else {
-                items.add(new Ast.TopStmt(parseStatement()));
+                // možda je trivija između funkcija
+                skipTrivia();
+                if (check(TokenType.EOF)) break;
+                // ako i dalje nije trivija ni fun-decl → greška
+                if (!(check(TokenType.BATTLE) || check(TokenType.AT_TYPE))) {
+                    throw error(peek(), "očekivao sam definiciju funkcije (battle ili @tip@)");
+                }
             }
+
+            // progutaj triviju posle svake funkcije
+            skipTrivia();
         }
+
+        // *** KLJUČNO: progutaj SVU triviju pre EOF-a ***
+        skipTrivia();
+        consume(TokenType.EOF, "čekao sam kraj fajla");
 
         return new Ast.Program(hasBattleMain, items);
     }
 
 
+    // FUN_DECL -> AT_TYPE IDENT '(' PARAM_LIST ')' BLOCK | battle '(' ')' BLOCK
     private Ast.FuncDef parseFunction() {
-        Token name = consume(TokenType.IDENT, "čekao sam ime funkcije");
+        if (match(TokenType.AT_TYPE)) {
+            Token atTok = previous();
+            Ast.Type returnType = atTypeToAstType(atTok);
 
-        consume(TokenType.LPAREN, "čekao sam '('");
+            Token name = consume(TokenType.IDENT, "čekao sam ime funkcije");
+            consume(TokenType.LPAREN, "čekao sam '('");
 
-        List<Ast.Param> params = new ArrayList<>();
-        if (!check(TokenType.RPAREN)) {
-            do {
-                Ast.Type t = parseType();
-                Token pname = consume(TokenType.IDENT, "čekao sam ime parametra");
-                params.add(new Ast.Param(pname, t));
-            } while (match(TokenType.COMMA));
+            List<Ast.Param> params = new ArrayList<>();
+            if (!check(TokenType.RPAREN)) {
+                do {
+                    Ast.Type t = parseType();
+                    Token pname = consume(TokenType.IDENT, "čekao sam ime parametra");
+                    params.add(new Ast.Param(pname, t));
+                } while (match(TokenType.COMMA));
+            }
+            consume(TokenType.RPAREN, "čekao sam ')'");
+            List<Ast.Stmt> body = parseBlock();
+            return new Ast.FuncDef(name, params, returnType, body);
         }
 
+        consume(TokenType.BATTLE, "čekao sam battle");
+        // name token "battle" (sintetički IDENT)
+        Token name = new Token(TokenType.IDENT, "battle", null, peek().line, peek().colStart, peek().colEnd);
+        consume(TokenType.LPAREN, "čekao sam '('");
         consume(TokenType.RPAREN, "čekao sam ')'");
-
-        // @tip@
-        consume(TokenType.AT_TYPE, "čekao sam '@'");
-        Ast.Type returnType = parseType();
-        consume(TokenType.AT_TYPE, "čekao sam '@'");
-
         List<Ast.Stmt> body = parseBlock();
 
-        return new Ast.FuncDef(name, params, returnType, body);
+        Ast.Type retVoid = new Ast.Type(
+                Ast.Type.Kind.VOID,
+                new Token(TokenType.BEZ_ELIXIRA, "bezElixira", null, name.line, name.colStart, name.colEnd),
+                0
+        );
+        return new Ast.FuncDef(name, List.of(), retVoid, body);
+    }
+
+    private Ast.Type atTypeToAstType(Token atTok) {
+        String lx = atTok.lexeme;                  // npr. "@brojElixira@"
+        String inner = lx.substring(1, lx.length() - 1);
+        Ast.Type.Kind kind;
+        Token baseTok;
+        switch (inner) {
+            case "brojElixira" -> { kind = Ast.Type.Kind.INT;    baseTok = new Token(TokenType.BROJ_ELIXIRA, inner, null, atTok.line, atTok.colStart, atTok.colEnd); }
+            case "doubleElixir" -> { kind = Ast.Type.Kind.DOUBLE; baseTok = new Token(TokenType.DOUBLE_ELIXIR, inner, null, atTok.line, atTok.colStart, atTok.colEnd); }
+            case "slovoKartice" -> { kind = Ast.Type.Kind.CHAR;   baseTok = new Token(TokenType.SLOVO_KARTICE, inner, null, atTok.line, atTok.colStart, atTok.colEnd); }
+            case "imeKartice" -> { kind = Ast.Type.Kind.STRING;   baseTok = new Token(TokenType.IME_KARTICE, inner, null, atTok.line, atTok.colStart, atTok.colEnd); }
+            case "bezElixira" -> { kind = Ast.Type.Kind.VOID;     baseTok = new Token(TokenType.BEZ_ELIXIRA, inner, null, atTok.line, atTok.colStart, atTok.colEnd); }
+            default -> throw error(atTok, "nepoznat tip u @type@");
+        }
+        return new Ast.Type(kind, baseTok, 0);
     }
 
 
     // Block
     private List<Ast.Stmt> parseBlock() {
         consume(TokenType.BLOCK_START, "čekao sam '#'");
+        skipNewlines(); // odmah posle '#'
 
         List<Ast.Stmt> stmts = new ArrayList<>();
         while (!check(TokenType.BLOCK_END) && !isAtEnd()) {
+            // ako naleti prazan red – progutaj i nastavi
+            if (match(TokenType.NEWLINE)) continue;
+
             stmts.add(parseStatement());
+            skipNewlines(); // dozvoli prazne redove između izjava
         }
 
         consume(TokenType.BLOCK_END, "čekao sam '$'");
@@ -77,15 +129,77 @@ public final class ParserAst {
 
     // STATEMENT
     private Ast.Stmt parseStatement() {
+        // krajBorbe ...
         if (match(TokenType.KRAJ_BORBE)) return parseReturn();
+
+        // leader / elder / member / cycle
         if (match(TokenType.LEADER)) return parseIf();
-        if (match(TokenType.ELDER)) error(peek(), "elder bez leader-a");
-        if (match(TokenType.MEMBER)) error(peek(), "member bez leader-a");
-        if (match(TokenType.CYCLE)) return parseCycle();
+        if (match(TokenType.ELDER))  throw error(peek(), "elder bez leader-a");
+        if (match(TokenType.MEMBER)) throw error(peek(), "member bez leader-a");
+        if (match(TokenType.CYCLE))  return parseCycle();
 
+        // deklaracija (TYPE ...)
         if (checkTypeKeyword()) return parseVarDecl();
+        if (check(TokenType.ISPISI_KARTICU) || check(TokenType.UCITAJ_KARTICU)) {
+            return parseBuiltinCallStmt();
+        }
 
-        return parseAssignOrCall();
+        // IDENT ...  -> ( funcCallStmt | arrayAssign | assignStmt )
+        if (check(TokenType.IDENT)) {
+            // pogledaj sledeći token and odluči
+            if (checkNext(TokenType.LPAREN))  return parseFuncCallStmt();
+            if (checkNext(TokenType.LBRACKET)) return parseArrayAssign();
+            if (checkNext(TokenType.ASSIGN))   return parseAssignStmt();
+            throw error(peek(), "posle imena očekujem '(', '[' ili '='");
+        }
+
+        throw error(peek(), "očekivao sam izjavu");
+    }
+    // IDENT '(' args ')' ';'
+    private Ast.Stmt parseFuncCallStmt() {
+        Token name = consume(TokenType.IDENT, "čekao sam ime funkcije");
+        consume(TokenType.LPAREN, "čekao sam '('");
+        List<Ast.Expr> args = new ArrayList<>();
+        if (!check(TokenType.RPAREN)) {
+            do { args.add(parseExpression()); }
+            while (match(TokenType.COMMA));
+        }
+        consume(TokenType.RPAREN, "čekao sam ')'");
+        consume(TokenType.SEMICOLON, "čekao sam ';'");
+        return new Ast.Stmt.CallStmt(new Ast.Expr.Call(null, name, args));
+    }
+
+    // IDENT '[' EXPR ']' '=' EXPR ';'
+    private Ast.Stmt parseArrayAssign() {
+        Token name = consume(TokenType.IDENT, "čekao sam ime niza");
+        List<Ast.Expr> indices = new ArrayList<>();
+        do {
+            consume(TokenType.LBRACKET, "čekao sam '['");
+            Ast.Expr idx = parseExpression();
+            consume(TokenType.RBRACKET, "čekao sam ']'");
+            indices.add(idx);
+        } while (check(TokenType.LBRACKET)); // podrži više dimenzija: a[i][j] ...
+
+        consume(TokenType.ASSIGN, "čekao sam '='");
+        Ast.Expr rhs = parseExpression();
+        consume(TokenType.SEMICOLON, "čekao sam ';'");
+
+        // za AST.Assign koristimo "klasično" lvalue = expr, pa zamenjujemo polja:
+        // konstruktor ti je (Expr left, LValue lvalue) iz stare notacije; napravi lvalue levo:
+        Ast.Stmt.LValue lv = new Ast.Stmt.LValue(name, indices);
+        // a "left" stavi RHS
+        return new Ast.Stmt.Assign(rhs, lv);
+    }
+
+    // IDENT '=' EXPR ';'
+    private Ast.Stmt parseAssignStmt() {
+        Token name = consume(TokenType.IDENT, "čekao sam ime");
+        consume(TokenType.ASSIGN, "čekao sam '='");
+        Ast.Expr rhs = parseExpression();
+        consume(TokenType.SEMICOLON, "čekao sam ';'");
+
+        Ast.Stmt.LValue lv = new Ast.Stmt.LValue(name, List.of());
+        return new Ast.Stmt.Assign(rhs, lv);
     }
 
 
@@ -103,25 +217,37 @@ public final class ParserAst {
 
     // IF / ELDER / MEMBER
     private Ast.Stmt.BeginIf parseIf() {
+        // LEADER je već match-ovan u parseStatement()
+
+        // leader ( ... ) #
         consume(TokenType.LPAREN, "čekao sam '('");
         Ast.Expr cond = parseExpression();
         consume(TokenType.RPAREN, "čekao sam ')'");
-        List<Ast.Stmt> block = parseBlock();
-        Ast.Stmt.BeginIf.Arm ifArm = new Ast.Stmt.BeginIf.Arm(cond, block);
+        List<Ast.Stmt> ifBlock = parseBlock();
 
+        Ast.Stmt.BeginIf.Arm ifArm = new Ast.Stmt.BeginIf.Arm(cond, ifBlock);
         List<Ast.Stmt.BeginIf.Arm> elders = new ArrayList<>();
+        List<Ast.Stmt> elseBlock = null;
 
+        // dozvoli prazne redove pre elder/member
+        skipNewlines();
+
+        // ( elder (...) # ... $ )*
         while (match(TokenType.ELDER)) {
             consume(TokenType.LPAREN, "čekao sam '('");
             Ast.Expr ec = parseExpression();
             consume(TokenType.RPAREN, "čekao sam ')'");
             List<Ast.Stmt> eb = parseBlock();
             elders.add(new Ast.Stmt.BeginIf.Arm(ec, eb));
+
+            // dozvoli prazne redove i između više elder grana
+            skipNewlines();
         }
 
-        List<Ast.Stmt> elseBlock = null;
+        // ( member # ... $ )?
         if (match(TokenType.MEMBER)) {
             elseBlock = parseBlock();
+            // opciono: skipNewlines(); // ako posle member bloka želiš da tolerišeš prazan red
         }
 
         return new Ast.Stmt.BeginIf(ifArm, elders, elseBlock);
@@ -132,43 +258,116 @@ public final class ParserAst {
     private Ast.Stmt.BeginCycle parseCycle() {
         consume(TokenType.LPAREN, "čekao sam '('");
 
+        // INIT (nema ')' ili drugi ';' ispred)
         Ast.Stmt init = null;
-        if (!check(TokenType.SEMICOLON)) init = parseStatement();
-        consume(TokenType.SEMICOLON, "");
+        if (!check(TokenType.SEMICOLON)) {
+            init = parseCycleInitOrStep();  // ← vraća Stmt; NE guta ';'
+        }
+        consume(TokenType.SEMICOLON, "čekao sam ';' posle init dela cycle()");
 
+        // COND (opciono)
         Ast.Expr cond = null;
-        if (!check(TokenType.SEMICOLON)) cond = parseExpression();
-        consume(TokenType.SEMICOLON, "");
+        if (!check(TokenType.SEMICOLON)) {
+            cond = parseExpression();
+        }
+        consume(TokenType.SEMICOLON, "čekao sam ';' posle cond dela cycle()");
 
+        // STEP (opciono; bez ';' u zaglavlju)
         Ast.Stmt step = null;
-        if (!check(TokenType.RPAREN)) step = parseStatement();
+        if (!check(TokenType.RPAREN)) {
+            step = parseCycleInitOrStep();  // ← vraća Stmt; bez ';'
+        }
         consume(TokenType.RPAREN, "čekao sam ')'");
 
         List<Ast.Stmt> body = parseBlock();
-
         return new Ast.Stmt.BeginCycle(init, cond, step, body);
     }
 
+    /**
+     * INIT u cycle(...): dozvoljavamo
+     *   - deklaraciju sa (ili bez) inicijalizacije: 'brojElixira i = 0;' ili 'brojElixira i;'
+     *   - klasičan assign: 'i = 0;'
+     * OVA funkcija MORA da pojede završni ';'
+     */
+    private void parseCycleInit() {
+        if (checkTypeKeyword()) {
+            // VarDecl ili VarDecl sa inicijalizacijom; tvoja parseVarDecl već POJEDA ';'
+            parseVarDecl();
+            return;
+        }
+        // AssignStmt: IDENT '=' EXPR ';'
+        Token id = consume(TokenType.IDENT, "čekao sam ime u init delu cycle()");
+        consume(TokenType.ASSIGN, "čekao sam '=' u init delu cycle()");
+        parseExpression();
+        consume(TokenType.SEMICOLON, "čekao sam ';' posle init dela cycle()");
+    }
+
+    /**
+     * STEP u cycle(...): dozvoljavamo
+     *   - postfix/prefix ++/--
+     *   - poziv funkcije f(...)
+     *   - dodelu IDENT '=' EXPR
+     * OVA funkcija NE SME da pojede ';' (jer ga u zaglavlju nema).
+     */
+    private Ast.Stmt parseCycleStep() {
+        // prefix ++/--
+        if (match(TokenType.INCREMENT, TokenType.DECREMENT)) {
+            consume(TokenType.IDENT, "čekao sam identifikator posle ++/-- u step delu");
+            return new Ast.Stmt.CallStmt(null); // ili konstruiši po želji "no-op" AST za step
+        }
+
+        if (check(TokenType.IDENT)) {
+            // postfix i++ / i--
+            if (checkNext(TokenType.INCREMENT) || checkNext(TokenType.DECREMENT)) {
+                consume(TokenType.IDENT, "čekao sam ime u postfix ++/--");
+                if (check(TokenType.INCREMENT)) consume(TokenType.INCREMENT, "očekivao sam '++'");
+                else consume(TokenType.DECREMENT, "očekivao sam '--'");
+                return new Ast.Stmt.CallStmt(null);
+            }
+
+            // poziv funkcije: ident '(' args ')'
+            if (checkNext(TokenType.LPAREN)) {
+                // recikliraj postojeći parser poziva iz izraza
+                Token name = consume(TokenType.IDENT, "čekao sam ime funkcije");
+                consume(TokenType.LPAREN, "čekao sam '('");
+                if (!check(TokenType.RPAREN)) {
+                    parseExpression();
+                    while (match(TokenType.COMMA)) parseExpression();
+                }
+                consume(TokenType.RPAREN, "čekao sam ')'");
+                return new Ast.Stmt.CallStmt(null);
+            }
+
+            // dodela: ident '=' expr
+            consume(TokenType.IDENT, "čekao sam ime u step delu");
+            consume(TokenType.ASSIGN, "čekao sam '=' u step delu");
+            parseExpression();
+            return new Ast.Stmt.CallStmt(null);
+        }
+
+        throw error(peek(), "očekivao sam izraz (++/--, poziv ili dodelu) u step delu cycle()");
+    }
 
     // VAR DECL
     private Ast.Stmt.VarDecl parseVarDecl() {
         Ast.Type t = parseType();
 
+        // ne koristimo dims sada; ostavi prazno
         List<Ast.Expr> dims = new ArrayList<>();
-        while (match(TokenType.LBRACKET)) {
-            Ast.Expr d = parseExpression();
-            consume(TokenType.RBRACKET, "čekao sam ']'");
-            dims.add(d);
-        }
 
-        List<Token> names = new ArrayList<>();
-        names.add(consume(TokenType.IDENT, "čekao sam ime promenljive"));
+        Token name = consume(TokenType.IDENT, "čekao sam ime promenljive");
 
-        while (match(TokenType.COMMA)) {
-            names.add(consume(TokenType.IDENT, "čekao sam ime promenljive"));
+        // (opciono) inicijalizacija
+        if (match(TokenType.ASSIGN)) {
+            // vrednost nam za sada ne ulazi u AST VarDecl, samo je progutamo
+            parseExpression();
         }
 
         consume(TokenType.SEMICOLON, "čekao sam ';'");
+
+        // tvom VarDecl-u treba lista imena — ovde imamo samo jedno ime
+        List<Token> names = new ArrayList<>();
+        names.add(name);
 
         return new Ast.Stmt.VarDecl(t, dims, names);
     }
@@ -235,15 +434,20 @@ public final class ParserAst {
     // EXPRESSIONS — kompletna hijerarhija
     private Ast.Expr parseExpression() { return parseTernary(); }
 
+    // TERNARY → LOGICAL_OR ( '{' EXPR '?' EXPR ':' EXPR '}' )?
     private Ast.Expr parseTernary() {
-        Ast.Expr cond = parseOr();
-        if (match(TokenType.TERNARY_QMARK)) {
-            Ast.Expr thenExpr = parseExpression();
+        Ast.Expr base = parseOr();
+
+        if (match(TokenType.LBRACE_TERNARY)) {
+            Ast.Expr cond = parseExpression();
+            consume(TokenType.TERNARY_QMARK, "čekao sam '?'");
+            Ast.Expr thenE = parseExpression();
             consume(TokenType.TERNARY_COLON, "čekao sam ':'");
-            Ast.Expr elseExpr = parseExpression();
-            return new Ast.Expr.Ternary(cond, thenExpr, elseExpr);
+            Ast.Expr elseE = parseExpression();
+            consume(TokenType.RBRACE_TERNARY, "čekao sam '}'");
+            return new Ast.Expr.Ternary(cond, thenE, elseE);
         }
-        return cond;
+        return base;
     }
 
     private Ast.Expr parseOr() {
@@ -317,6 +521,16 @@ public final class ParserAst {
 
     private Ast.Expr parsePrimary() {
 
+        if (match(TokenType.DOUBLE_LIT)) {
+            Token tok = previous();
+            double val = Double.parseDouble(tok.lexeme);
+            return new Ast.Expr.LiteralDouble(tok, val);
+        }
+
+// HEX / OCT (po želji mapiraj u long; ovde dummy 0L)
+        if (match(TokenType.HEX_LIT))  return new Ast.Expr.LiteralInt(previous(), 0L);
+        if (match(TokenType.OCT_LIT))  return new Ast.Expr.LiteralInt(previous(), 0L);
+
         // literal int
         if (match(TokenType.INT_LIT)) {
             Token tok = previous();
@@ -372,6 +586,16 @@ public final class ParserAst {
 
         throw error(peek(), "neočekivan token u izrazu");
     }
+    private Ast.Expr.Call parseBuiltinCall() {
+        Token callee = advance(); // ISPISI_KARTICU ili UCITAJ_KARTICU
+        consume(TokenType.LPAREN, "čekao sam '('");
+        List<Ast.Expr> args = new ArrayList<>();
+        if (!check(TokenType.RPAREN)) {
+            do { args.add(parseExpression()); } while (match(TokenType.COMMA));
+        }
+        consume(TokenType.RPAREN, "čekao sam ')'");
+        return new Ast.Expr.Call(null, callee, args);
+    }
 
 
     // TOKEN helpers
@@ -382,12 +606,15 @@ public final class ParserAst {
         return false;
     }
 
-    private boolean check(TokenType t) {
-        if (isAtEnd()) return false;
-        return peek().type == t;
+    private boolean check(TokenType... types) {
+        TokenType cur = peek().type; // bez ranog return-a na isAtEnd()
+        for (TokenType t : types) if (cur == t) return true;
+        return false;
     }
-
     private Token consume(TokenType t, String msg) {
+        if (t == TokenType.EOF) {
+            while (match(TokenType.NEWLINE)) { /* skip trailing newlines */ }
+        }
         if (check(t)) return advance();
         throw error(peek(), msg);
     }
@@ -404,4 +631,195 @@ public final class ParserAst {
     private RuntimeException error(Token t, String msg) {
         return new RuntimeException("Parser error at line " + t.line + ": " + msg);
     }
+    private void skipNewlines() {
+        while (match(TokenType.NEWLINE)) { /* ignore */ }
+    }
+    private Ast.Stmt parseInitOrSimpleInCycle() {
+        // 1) var decl u init-u, npr. brojElixira i = 0;
+        if (checkTypeKeyword()) {
+            return parseVarDecl(); // ova metoda već proguta ';'
+        }
+
+        // 2) prefiks ++/--
+        if (match(TokenType.INCREMENT, TokenType.DECREMENT)) {
+            Token op = previous();
+            Token id = consume(TokenType.IDENT, "čekao sam identifikator posle " + op.lexeme);
+            consume(TokenType.SEMICOLON, "čekao sam ';'");
+            // modeliramo kao: (id op) kao CallStmt od "call" bez args? ili jednostavno dodela id = id +/- 1;
+            // Pošto već imaš Stmt.Assign, najjednostavnije: id = id + 1; (ali treba ti '+')
+            // Da ne komplikujemo AST, vrati "prazan" call stmt (ili null) — ako želiš semantiku, dodaj kasnije.
+            return new Ast.Stmt.CallStmt(new Ast.Expr.Call(null, id, List.of()));
+        }
+
+        // 3) postfix i++ / i--
+        if (check(TokenType.IDENT) && (checkNext(TokenType.INCREMENT) || checkNext(TokenType.DECREMENT))) {
+            Token id = consume(TokenType.IDENT, "čekao sam ime");
+            if (check(TokenType.INCREMENT)) {
+                consume(TokenType.INCREMENT, "očekivao sam '++'");
+            } else {
+                consume(TokenType.DECREMENT, "očekivao sam '--'");
+            }
+            consume(TokenType.SEMICOLON, "čekao sam ';'");
+            return new Ast.Stmt.CallStmt(new Ast.Expr.Call(null, id, List.of()));
+        }
+
+        // 4) poziv funkcije: f(...)
+        if (check(TokenType.IDENT) && checkNext(TokenType.LPAREN)) {
+            Token name = consume(TokenType.IDENT, "čekao sam ime funkcije");
+            consume(TokenType.LPAREN, "čekao sam '('");
+            List<Ast.Expr> args = new ArrayList<>();
+            if (!check(TokenType.RPAREN)) {
+                do { args.add(parseExpression()); } while (match(TokenType.COMMA));
+            }
+            consume(TokenType.RPAREN, "čekao sam ')'");
+            consume(TokenType.SEMICOLON, "čekao sam ';'");
+            return new Ast.Stmt.CallStmt(new Ast.Expr.Call(null, name, args));
+        }
+
+        // 5) dodela: ident [expr]* = expr ;
+        if (check(TokenType.IDENT)) {
+            Token name = consume(TokenType.IDENT, "čekao sam ime");
+            List<Ast.Expr> indices = new ArrayList<>();
+            while (match(TokenType.LBRACKET)) {
+                Ast.Expr e = parseExpression();
+                consume(TokenType.RBRACKET, "čekao sam ']'");
+                indices.add(e);
+            }
+            consume(TokenType.ASSIGN, "čekao sam '='");
+            Ast.Expr rhs = parseExpression();
+            consume(TokenType.SEMICOLON, "čekao sam ';'");
+            Ast.Stmt.LValue lv = new Ast.Stmt.LValue(name, indices);
+            return new Ast.Stmt.Assign(rhs, lv);
+        }
+
+        throw error(peek(), "očekivao sam init/step naredbu u cycle()");
+    }
+    private boolean checkNext(TokenType type) {
+        if (isAtEnd()) return false;
+        if (current + 1 >= tokens.size()) return false;
+        return tokens.get(current + 1).type == type;
+    }
+
+    // (opciono) ako želiš i peek na sledeći token
+    private Token peekNext() {
+        if (current + 1 >= tokens.size()) return tokens.get(tokens.size() - 1);
+        return tokens.get(current + 1);
+    }
+    private Ast.Stmt parseBuiltinCallStmt() {
+        // advance uzima sam token: ISPISI_KARTICU ili UCITAJ_KARTICU
+        Token callee = advance();
+        consume(TokenType.LPAREN, "čekao sam '('");
+        List<Ast.Expr> args = new ArrayList<>();
+        if (!check(TokenType.RPAREN)) {
+            do { args.add(parseExpression()); }
+            while (match(TokenType.COMMA));
+        }
+        consume(TokenType.RPAREN, "čekao sam ')'");
+        consume(TokenType.SEMICOLON, "čekao sam ';'");
+
+        // Call AST: (callTok, callee, args). Možeš slobodno da proslediš isti token kao callee.
+        return new Ast.Stmt.CallStmt(new Ast.Expr.Call(callee, callee, args));
+    }
+    private void skipTrivia() {
+        while (true) {
+            if (match(TokenType.NEWLINE)) continue;
+            if (!isAtEnd()) {
+                String lx = peek().lexeme;
+                if (lx != null && lx.isBlank()) { advance(); continue; }
+            }
+            break;
+        }
+    }
+    private Ast.Stmt parseCycleInitOrStep() {
+        // (a) Deklaracija (s inicijalizacijom ili bez): brojElixira i = 0   |   brojElixira i
+        if (checkTypeKeyword()) {
+            Ast.Type t = parseType();
+
+            // opcione dimenzije — ako ih ne koristiš, može ostati prazno
+            List<Ast.Expr> dims = new ArrayList<>();
+
+            Token name = consume(TokenType.IDENT, "čekao sam ime promenljive");
+
+            // inicijalizacija opcionalna
+            Ast.Expr initExpr = null;
+            if (match(TokenType.ASSIGN)) {
+                initExpr = parseExpression();
+            }
+
+            // AST VarDecl ti ne čuva init; ako želiš da zadržiš semantiku, možeš:
+            //   1) vratiti VarDecl (kao što je), i
+            //   2) ako ima initExpr, odmah posle VarDecl u AST-u dodati i Assign;
+            // Ali pošto INIT mora biti 1 Stmt, najjednostavnije:
+            if (initExpr == null) {
+                // samo deklaracija
+                List<Token> names = new ArrayList<>();
+                names.add(name);
+                return new Ast.Stmt.VarDecl(t, dims, names);
+            } else {
+                // "desugar": vrati Assign (init) jer BeginCycle.init očekuje jednu naredbu
+                Ast.Stmt.LValue lv = new Ast.Stmt.LValue(name, List.of());
+                return new Ast.Stmt.Assign(initExpr, lv);
+            }
+        }
+
+        // (b) prefiks ++i / --i → i = i ± 1
+        if (match(TokenType.INCREMENT, TokenType.DECREMENT)) {
+            Token op = previous();
+            Token name = consume(TokenType.IDENT, "čekao sam identifikator posle " + op.lexeme);
+            return makeIncDecAssign(name, op.type == TokenType.INCREMENT);
+        }
+
+        // (c) IDENT ...
+        if (check(TokenType.IDENT)) {
+            Token name = advance();
+
+            // postfix i++ / i--
+            if (match(TokenType.INCREMENT)) return makeIncDecAssign(name, true);
+            if (match(TokenType.DECREMENT)) return makeIncDecAssign(name, false);
+
+            // poziv funkcije: ident '(' ... ')'
+            if (match(TokenType.LPAREN)) {
+                List<Ast.Expr> args = new ArrayList<>();
+                if (!check(TokenType.RPAREN)) {
+                    do { args.add(parseExpression()); } while (match(TokenType.COMMA));
+                }
+                consume(TokenType.RPAREN, "čekao sam ')'");
+                return new Ast.Stmt.CallStmt(new Ast.Expr.Call(null, name, args));
+            }
+
+            // indeksiranje: ident[expr]...  (opciono više dimenzija)
+            List<Ast.Expr> idx = new ArrayList<>();
+            while (match(TokenType.LBRACKET)) {
+                Ast.Expr e = parseExpression();
+                consume(TokenType.RBRACKET, "čekao sam ']'");
+                idx.add(e);
+            }
+
+            // dodela: ... '=' expr
+            if (match(TokenType.ASSIGN)) {
+                Ast.Expr rhs = parseExpression();
+                Ast.Stmt.LValue lv = new Ast.Stmt.LValue(name, idx);
+                return new Ast.Stmt.Assign(rhs, lv);
+            }
+
+            throw error(peek(), "očekivao sam ++/--, poziv ili dodelu u init/step delu cycle()");
+        }
+
+        throw error(peek(), "očekivao sam naredbu u init/step delu cycle()");
+    }
+    private Ast.Stmt makeIncDecAssign(Token name, boolean increment) {
+        Ast.Expr id = new Ast.Expr.Ident(name);
+        Token opTok = increment
+                ? new Token(TokenType.ADD, "+", null, name.line, name.colStart, name.colEnd)
+                : new Token(TokenType.SUB, "-", null, name.line, name.colStart, name.colEnd);
+        Token oneTok = new Token(TokenType.INT_LIT, "1", 1L, name.line, name.colStart, name.colEnd);
+
+        Ast.Expr one = new Ast.Expr.LiteralInt(oneTok, 1L);
+        Ast.Expr rhs = new Ast.Expr.Binary(id, opTok, one); // i ± 1
+
+        Ast.Stmt.LValue lv = new Ast.Stmt.LValue(name, List.of());
+        return new Ast.Stmt.Assign(rhs, lv); // (i±1) -> i
+    }
+
+
 }

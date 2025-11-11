@@ -2,6 +2,7 @@ package application;
 
 import lexer.Lexer;
 import lexer.token.Token;
+import lexer.token.TokenFormatter;
 import parser.RecognizerParser;
 import parser.ast.ParserAst;
 import parser.ast.Ast;
@@ -34,6 +35,7 @@ public class Application {
         Lexer lexer = new Lexer(source);
         List<Token> tokens = lexer.scanTokens();
         System.out.println("LEXING OK");
+        System.out.println(TokenFormatter.formatList(tokens));
 
          //3) SINTAKSA
         RecognizerParser recognizer = new RecognizerParser(tokens);

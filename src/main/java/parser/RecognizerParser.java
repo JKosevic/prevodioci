@@ -4,51 +4,46 @@ import java.util.List;
 import lexer.token.Token;
 import lexer.token.TokenType;
 
+
+import java.util.List;
+import lexer.token.Token;
+import lexer.token.TokenType;
+
 public final class RecognizerParser {
 
     private final List<Token> tokens;
     private int current = 0;
 
-    public RecognizerParser(List<Token> tokens) {
-        this.tokens = tokens;
-    }
-    private void skipTrailingGarbage() {
-        while (check(TokenType.NEWLINE) || peek().lexeme.isBlank()) {
-            advance();
+    public RecognizerParser(List<Token> tokens) { this.tokens = tokens; }
+
+    // =============== PROGRAM ===============
+    public void parseProgram() {
+        skipNewlines();
+        while (!check(TokenType.EOF)) {
+            parseFunDecl();
+            skipNewlines();
         }
+        consume(TokenType.EOF, "očekivao sam kraj fajla");
     }
 
-    // ========================= PROGRAM =========================
-
-
-
-    // ========================= FUN DECL =========================
-
+    // FUN_DECL → AT_TYPE IDENT '(' PARAM_LIST ')' BLOCK | battle '(' ')' BLOCK
     private void parseFunDecl() {
-
-        // @brojElixira@ ime(...)
-        if (check(TokenType.AT_TYPE)) {
-            advance();
+        skipNewlines();
+        if (match(TokenType.AT_TYPE)) {
             consume(TokenType.IDENT, "očekivao sam ime funkcije");
             consume(TokenType.LPAREN, "očekivao sam '('");
-
-            if (!check(TokenType.RPAREN))
-                parseParamList();
-
+            if (!check(TokenType.RPAREN)) parseParamList();
             consume(TokenType.RPAREN, "očekivao sam ')'");
             parseBlock();
             return;
         }
-
-        // battle()
         consume(TokenType.BATTLE, "očekivao sam battle");
         consume(TokenType.LPAREN, "očekivao sam '('");
         consume(TokenType.RPAREN, "očekivao sam ')'");
         parseBlock();
     }
 
-    // ========================= PARAM LIST =========================
-
+    // =============== PARAM LIST ===============
     private void parseParamList() {
         parseType();
         consume(TokenType.IDENT, "očekivao sam ime parametra");
@@ -58,41 +53,31 @@ public final class RecognizerParser {
         }
     }
 
-    // ========================= TYPE =========================
-
+    // =============== TYPE ===============
     private void parseType() {
-        if (!match(TokenType.BROJ_ELIXIRA,
-                TokenType.SLOVO_KARTICE,
-                TokenType.DOUBLE_ELIXIR,
-                TokenType.IME_KARTICE,
+        if (!match(TokenType.BROJ_ELIXIRA, TokenType.SLOVO_KARTICE,
+                TokenType.DOUBLE_ELIXIR, TokenType.IME_KARTICE,
                 TokenType.BEZ_ELIXIRA)) {
-
             error(peek(), "očekivao sam tip");
         }
     }
 
-    // ========================= BLOCK =========================
-
+    // =============== BLOCK ===============
     private void parseBlock() {
         consume(TokenType.BLOCK_START, "očekivao sam '#'");
         skipNewlines();
-
         while (!check(TokenType.BLOCK_END)) {
             parseStmt();
             skipNewlines();
         }
-
         consume(TokenType.BLOCK_END, "očekivao sam '$'");
     }
 
-    // ========================= STATEMENT =========================
-
+    // =============== STATEMENT ===============
     private void parseStmt() {
+        if (match(TokenType.NEWLINE)) return;
 
-        if (match(TokenType.NEWLINE))
-            return;
-
-        // BUILT-IN funkcije
+        // built-in pozivi
         if (check(TokenType.ISPISI_KARTICU) || check(TokenType.UCITAJ_KARTICU)) {
             advance();
             consume(TokenType.LPAREN, "očekivao sam '('");
@@ -105,34 +90,28 @@ public final class RecognizerParser {
             return;
         }
 
-        // DECLARACIJE
-        if (startsType()) {
-            parseVarDeclOrInit();
-            return;
-        }
+        // deklaracije: TYPE ident [= EXPR] ;
+        if (startsType()) { parseVarDeclOrInit(); return; }
 
-        // IF / ELIF / MEMBER
+        // if/elif/member
         if (check(TokenType.LEADER)) { parseIf(); return; }
-        if (check(TokenType.ELDER))  { error(peek(),"elder bez leader-a"); }
+        if (check(TokenType.ELDER))  { error(peek(), "elder bez leader-a"); }
         if (check(TokenType.MEMBER)) { parseMember(); return; }
 
-        // CYCLE
+        // cycle
         if (check(TokenType.CYCLE)) { parseCycle(); return; }
 
-        // ✅ RETURN — krajBorbe
-        if (check(TokenType.KRAJ_BORBE)) {
-            parseReturn();
-            return;
-        }
+        // return
+        if (check(TokenType.KRAJ_BORBE)) { parseReturn(); return; }
 
-        // PREFIX ++i / --i
+        // ++i/--i
         if (match(TokenType.INCREMENT, TokenType.DECREMENT)) {
             consume(TokenType.IDENT, "očekivao sam identifikator");
             consume(TokenType.SEMICOLON, "očekivao sam ';'");
             return;
         }
 
-        // POSTFIX i++ / i--
+        // i++ / i--
         if (check(TokenType.IDENT) && checkNext(TokenType.INCREMENT)) {
             consume(TokenType.IDENT, "očekivao sam ime");
             consume(TokenType.INCREMENT, "očekivao sam ++");
@@ -146,46 +125,31 @@ public final class RecognizerParser {
             return;
         }
 
-        // STANDARDNI POZIV / DODELA
+        // ident(...) ;  |  ident[expr] = expr ;  |  ident = expr ;
         if (check(TokenType.IDENT)) {
-
             if (checkNext(TokenType.LPAREN)) {
                 parseFuncCall();
                 consume(TokenType.SEMICOLON, "očekivao sam ';'");
                 return;
             }
-
-            if (checkNext(TokenType.LBRACKET)) {
-                parseArrayAssign();
-                return;
-            }
-
-            parseAssign();
-            return;
+            if (checkNext(TokenType.LBRACKET)) { parseArrayAssign(); return; }
+            parseAssign(); return;
         }
 
         error(peek(), "očekivao sam izjavu");
     }
 
-    // ========================= DECLARATIONS =========================
-
     private void parseVarDeclOrInit() {
         parseType();
         consume(TokenType.IDENT, "očekivao sam ime promenljive");
-
-        if (match(TokenType.SEMICOLON))
-            return;
-
+        if (match(TokenType.SEMICOLON)) return;
         if (match(TokenType.ASSIGN)) {
             parseExpr();
             consume(TokenType.SEMICOLON, "očekivao sam ';'");
             return;
         }
-
         error(peek(), "neispravna deklaracija");
     }
-
-    // ========================= ASSIGN =========================
 
     private void parseAssign() {
         consume(TokenType.IDENT, "očekivao sam ime");
@@ -193,8 +157,6 @@ public final class RecognizerParser {
         parseExpr();
         consume(TokenType.SEMICOLON, "očekivao sam ';'");
     }
-
-    // ========================= ARRAY ASSIGN =========================
 
     private void parseArrayAssign() {
         consume(TokenType.IDENT, "očekivao sam ime niza");
@@ -206,57 +168,15 @@ public final class RecognizerParser {
         consume(TokenType.SEMICOLON, "očekivao sam ';'");
     }
 
-    // ========================= SIMPLE STMT =========================
-
-    private void parseSimpleStmt() {
-
-        if (match(TokenType.INCREMENT, TokenType.DECREMENT)) {
-            consume(TokenType.IDENT, "očekivao sam identifikator posle ++/--");
-            return;
-        }
-
-        if (check(TokenType.IDENT)) {
-
-            if (checkNext(TokenType.INCREMENT)) {
-                consume(TokenType.IDENT, "očekivao sam ime");
-                consume(TokenType.INCREMENT, "očekivao sam ++");
-                return;
-            }
-
-            if (checkNext(TokenType.DECREMENT)) {
-                consume(TokenType.IDENT, "očekivao sam ime");
-                consume(TokenType.DECREMENT, "očekivao sam --");
-                return;
-            }
-
-            if (checkNext(TokenType.LPAREN)) {
-                parseFuncCall();
-                return;
-            }
-
-            parseAssign();
-            return;
-        }
-
-        error(peek(), "očekivao sam izraz u step delu cycle()");
-    }
-
-    // ========================= FUNCTION CALL =========================
-
     private void parseFuncCall() {
         consume(TokenType.IDENT, "očekivao sam ime funkcije");
         consume(TokenType.LPAREN, "očekivao sam '('");
-
         if (!check(TokenType.RPAREN)) {
             parseExpr();
-            while (match(TokenType.COMMA))
-                parseExpr();
+            while (match(TokenType.COMMA)) parseExpr();
         }
-
         consume(TokenType.RPAREN, "očekivao sam ')'");
     }
-
-    // ========================= IF / ELIF / MEMBER =========================
 
     private void parseIf() {
         consume(TokenType.LEADER, "očekivao sam leader");
@@ -264,13 +184,13 @@ public final class RecognizerParser {
         parseExpr();
         consume(TokenType.RPAREN, "očekivao sam ')'");
         parseBlock();
-
         while (match(TokenType.ELDER)) {
             consume(TokenType.LPAREN, "očekivao sam '('");
             parseExpr();
             consume(TokenType.RPAREN, "očekivao sam ')'");
             parseBlock();
         }
+        if (match(TokenType.MEMBER)) parseBlock();
     }
 
     private void parseMember() {
@@ -278,16 +198,12 @@ public final class RecognizerParser {
         parseBlock();
     }
 
-    // ========================= CYCLE =========================
-
     private void parseCycle() {
         consume(TokenType.CYCLE, "očekivao sam cycle");
         consume(TokenType.LPAREN, "očekivao sam '('");
 
-        if (startsType())
-            parseVarDeclOrInit();
-        else
-            parseSimpleStmt();
+        if (startsType()) parseVarDeclOrInit();
+        else parseSimpleStmt();
 
         parseExpr();
         consume(TokenType.SEMICOLON, "očekivao sam ';'");
@@ -298,150 +214,131 @@ public final class RecognizerParser {
         parseBlock();
     }
 
-    // ========================= RETURN — krajBorbe =========================
+    private void parseSimpleStmt() {
+        if (match(TokenType.INCREMENT, TokenType.DECREMENT)) {
+            consume(TokenType.IDENT, "očekivao sam identifikator posle ++/--");
+            return;
+        }
+        if (check(TokenType.IDENT)) {
+            if (checkNext(TokenType.INCREMENT)) { consume(TokenType.IDENT,"očekivao sam ime"); consume(TokenType.INCREMENT,"očekivao sam ++"); return; }
+            if (checkNext(TokenType.DECREMENT)) { consume(TokenType.IDENT,"očekivao sam ime"); consume(TokenType.DECREMENT,"očekivao sam --"); return; }
+            if (checkNext(TokenType.LPAREN)) { parseFuncCall(); return; }
+            parseAssign(); return;
+        }
+        error(peek(), "očekivao sam izraz u step delu cycle()");
+    }
 
     private void parseReturn() {
         consume(TokenType.KRAJ_BORBE, "očekivao sam krajBorbe");
-
-        if (!check(TokenType.SEMICOLON)) {
-            parseExpr();
-        }
-
+        if (!check(TokenType.SEMICOLON)) parseExpr();
         consume(TokenType.SEMICOLON, "očekivao sam ';'");
     }
 
-    // ========================= EXPRESSION =========================
+    // =============== EXPR + TERNARY ({ cond ? then : else }) ===============
+    private void parseExpr() { parseTernary(); }
 
-    private void parseExpr() { parseOr(); }
+    private void parseTernary() {
+        parseOr();
+        if (match(TokenType.LBRACE_TERNARY)) {
+            parseExpr();
+            consume(TokenType.TERNARY_QMARK, "očekivao sam '?'");
+            parseExpr();
+            consume(TokenType.TERNARY_COLON, "očekivao sam ':'");
+            parseExpr();
+            consume(TokenType.RBRACE_TERNARY, "očekivao sam '}'");
+        }
+    }
 
     private void parseOr() {
         parseAnd();
         while (match(TokenType.LOG_OR)) parseAnd();
     }
-
     private void parseAnd() {
         parseEquality();
         while (match(TokenType.LOG_AND)) parseEquality();
     }
-
     private void parseEquality() {
         parseComparison();
         while (match(TokenType.EQ, TokenType.NEQ)) parseComparison();
     }
-
     private void parseComparison() {
         parseTerm();
         while (match(TokenType.LT, TokenType.LE, TokenType.GT, TokenType.GE)) parseTerm();
     }
-
     private void parseTerm() {
         parseFactor();
         while (match(TokenType.ADD, TokenType.SUB)) parseFactor();
     }
-
     private void parseFactor() {
         parseUnary();
         while (match(TokenType.MULTIPLY, TokenType.DIVIDE, TokenType.PERCENT)) parseUnary();
     }
-
     private void parseUnary() {
         if (match(TokenType.ADD, TokenType.SUB, TokenType.LOG_NOT,
                 TokenType.INCREMENT, TokenType.DECREMENT)) {
-            parseUnary();
-            return;
+            parseUnary(); return;
         }
         parsePrimary();
     }
-
     private void parsePrimary() {
-        if (match(TokenType.INT_LIT, TokenType.DOUBLE_LIT,
-                TokenType.STRING_LIT, TokenType.CHAR_LIT,
-                TokenType.HEX_LIT, TokenType.OCT_LIT))
-            return;
-
-        if (check(TokenType.IDENT) && checkNext(TokenType.LPAREN)) {
-            parseFuncCall();
-            return;
-        }
-
-        if (match(TokenType.IDENT))
-            return;
-
-        if (match(TokenType.LPAREN)) {
-            parseExpr();
-            consume(TokenType.RPAREN, "očekivao sam ')'");
-            return;
-        }
-
+        if (match(TokenType.INT_LIT, TokenType.DOUBLE_LIT, TokenType.STRING_LIT,
+                TokenType.CHAR_LIT, TokenType.HEX_LIT, TokenType.OCT_LIT)) return;
+        if (check(TokenType.IDENT) && checkNext(TokenType.LPAREN)) { parseFuncCall(); return; }
+        if (match(TokenType.IDENT)) return;
+        if (match(TokenType.LPAREN)) { parseExpr(); consume(TokenType.RPAREN, "očekivao sam ')'"); return; }
         error(peek(), "očekivao sam izraz");
     }
 
-    // ========================= HELPERS =========================
-
+    // =============== helpers ===============
     private boolean startsType() {
-        return check(TokenType.BROJ_ELIXIRA,
-                TokenType.SLOVO_KARTICE,
-                TokenType.DOUBLE_ELIXIR,
-                TokenType.IME_KARTICE,
-                TokenType.BEZ_ELIXIRA);
+        return check(TokenType.BROJ_ELIXIRA, TokenType.SLOVO_KARTICE,
+                TokenType.DOUBLE_ELIXIR, TokenType.IME_KARTICE, TokenType.BEZ_ELIXIRA);
     }
-
     private boolean check(TokenType... types) {
-        if (isAtEnd()) return false;
-        for (TokenType t : types)
-            if (peek().type == t) return true;
+        // Ako smo na EOF tokenu, dozvoli poređenje sa EOF
+        if (isAtEnd()) {
+            for (TokenType t : types) if (t == TokenType.EOF) return true;
+            return false;
+        }
+        for (TokenType t : types) if (peek().type == t) return true;
         return false;
     }
-
     private boolean checkNext(TokenType type) {
-        if (isAtEnd()) return false;
-        if (current + 1 >= tokens.size()) return false;
+        if (isAtEnd() || current + 1 >= tokens.size()) return false;
         return tokens.get(current + 1).type == type;
     }
-
     private boolean match(TokenType... types) {
-        for (TokenType t : types) {
-            if (check(t)) {
-                advance();
-                return true;
-            }
-        }
+        for (TokenType t : types) if (check(t)) { advance(); return true; }
         return false;
     }
-
-    private Token advance() {
-        if (!isAtEnd()) current++;
-        return previous();
-    }
-
-    private boolean isAtEnd() {
-        return peek().type == TokenType.EOF;
-    }
-
+    private Token advance() { if (!isAtEnd()) current++; return previous(); }
+    private boolean isAtEnd() { return peek().type == TokenType.EOF; }
     private Token peek() { return tokens.get(current); }
     private Token previous() { return tokens.get(current - 1); }
-
     private Token consume(TokenType type, String msg) {
+        if (type == TokenType.EOF) {
+            while (!isAtEnd()) {
+                if (peek().type == TokenType.NEWLINE) { advance(); continue; }
+                // dodatni guard ako se pojavi neki token sa blank lexemom
+                if (peek().lexeme != null && peek().lexeme.isBlank()) { advance(); continue; }
+                break;
+            }
+        }
         if (check(type)) return advance();
         error(peek(), msg);
-        return null;
+        return null; // unreachable
+    }
+    private void skipNewlines() {
+        while (match(TokenType.NEWLINE)) {
+            // gutaj sve NEWLINE tokene
+        }
     }
 
-    private void skipNewlines() {
-        while (match(TokenType.NEWLINE)) {}
-    }
 
     private void error(Token t, String msg) {
-        throw new RuntimeException(
-                "PARSER ERROR kod '" + t.lexeme + "' – " +
-                        msg + " (linija " + t.line + ", kol " + t.colStart + ")"
-        );
-    }
-    public void parseProgram() {
-        skipNewlines();
-        parseFunDecl();
-        skipNewlines();     // dozvoli prazne linije na kraju
-        consume(TokenType.EOF, "očekivao sam kraj fajla posle battle");
+        throw new RuntimeException("PARSER ERROR kod '" + t.lexeme + "' – " + msg +
+                " (linija " + t.line + ", kol " + t.colStart + ")");
     }
 }
+
 

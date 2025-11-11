@@ -1,0 +1,11 @@
+battle() #
+    brojElixira x;
+    x = 5;
+
+    imeKartice s = "Pekka";
+
+    ispisiKarticu(s);
+    ucitajKarticu(x);
+
+    krajBorbe;
+$

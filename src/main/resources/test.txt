@@ -1,18 +1,28 @@
-    battle() #
-    brojElixira elixir = 2;
-    brojElixira elixir2 = 3;
+@brojElixira@ saberi(brojElixira a, brojElixira b) #
+    krajBorbe a + b;
+$
 
-    cycle(brojElixira i = 0 ; i < elixir ; i++) #
-        elixir2 = elixir2 + 1;
+@imeKartice@ izaberiIme(brojElixira v) #
+    leader(v > 0) #
+        krajBorbe "Musketeer";
     $
-
-    leader(elixir2 >= 3) #
-        ispisiKarticu("Ima vise od 3");
-    $
-
     member #
-        ispisiKarticu("Ima manje od 3");
+        krajBorbe "Pekka";
     $
+$
+
+@bezElixira@ prikazi(imeKartice msg) #
+    ispisiKarticu(msg);
+    krajBorbe;
+$
+
+battle() #
+    brojElixira x = 7;
+    brojElixira y = 5;
+
+    brojElixira z = saberi(x, y);
+    imeKartice t = izaberiIme(z);
+    prikazi(t);
 
     krajBorbe;
-    $
+$
