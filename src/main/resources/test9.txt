@@ -1,0 +1,8 @@
+battle() #
+    slovoKartice ch = 'A';
+    brojElixira h = HB4C;
+    brojElixira o = O43;
+
+    ispisiKarticu("ok");
+    krajBorbe;
+$

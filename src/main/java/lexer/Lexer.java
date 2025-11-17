@@ -14,31 +14,31 @@ public class Lexer {
 
     private static final Map<String, TokenType> KEYWORDS = Map.ofEntries(
 
-            // --- Tipovi podataka ---
+
             Map.entry("brojElixira", TokenType.BROJ_ELIXIRA),
             Map.entry("slovoKartice", TokenType.SLOVO_KARTICE),
             Map.entry("doubleElixir", TokenType.DOUBLE_ELIXIR),
             Map.entry("imeKartice", TokenType.IME_KARTICE),
 
-            // --- Glavna funkcija ---
+
             Map.entry("battle", TokenType.BATTLE),
 
-            // --- Povratna vrednost funkcije ---
+
             Map.entry("bezElixira", TokenType.BEZ_ELIXIRA),
 
-            // --- Built-in funkcije ---
+
             Map.entry("ucitajKarticu", TokenType.UCITAJ_KARTICU),
             Map.entry("ispisiKarticu", TokenType.ISPISI_KARTICU),
 
-            // --- Uslovne naredbe ---
-            Map.entry("leader", TokenType.LEADER),   // if
-            Map.entry("elder", TokenType.ELDER),     // else if
-            Map.entry("member", TokenType.MEMBER),   // else
 
-            // --- For / cycle ---
+            Map.entry("leader", TokenType.LEADER),
+            Map.entry("elder", TokenType.ELDER),
+            Map.entry("member", TokenType.MEMBER),
+
+
             Map.entry("cycle", TokenType.CYCLE),
 
-            // --- Return ---
+
             Map.entry("krajBorbe", TokenType.KRAJ_BORBE)
     );
 
@@ -60,13 +60,13 @@ public class Lexer {
         char c = sc.advance();
 
         switch (c) {
-            // --- zagrade ---
+
             case '(' -> add(TokenType.LPAREN);
             case ')' -> add(TokenType.RPAREN);
             case '[' -> add(TokenType.LBRACKET);
             case ']' -> add(TokenType.RBRACKET);
 
-            // --- blokovi i ternarni ---
+
             case '#' -> add(TokenType.BLOCK_START);
             case '$' -> add(TokenType.BLOCK_END);
             case '{' -> add(TokenType.LBRACE_TERNARY);
@@ -74,12 +74,12 @@ public class Lexer {
             case '?' -> add(TokenType.TERNARY_QMARK);
             case ':' -> add(TokenType.TERNARY_COLON);
 
-            // --- separatori / dodela ---
+
             case ',' -> add(TokenType.COMMA);
             case ';' -> add(TokenType.SEMICOLON);
             case '=' -> add(sc.match('=') ? TokenType.EQ : TokenType.ASSIGN);
 
-            // --- aritmetički ---
+
             case '+' -> {
                 if (sc.match('+')) add(TokenType.INCREMENT);
                 else if (sc.match('=')) add(TokenType.PLUS_ASSIGN);
@@ -96,11 +96,11 @@ public class Lexer {
             case '/' -> add(TokenType.DIVIDE);
             case '%' -> add(TokenType.PERCENT);
 
-            // --- relacioni ---
+
             case '<' -> add(sc.match('=') ? TokenType.LE : TokenType.LT);
             case '>' -> add(sc.match('=') ? TokenType.GE : TokenType.GT);
 
-            // --- logički ---
+
             case '&' -> add(TokenType.LOG_AND);
             case '|' -> add(TokenType.LOG_OR);
             case '!' -> add(sc.match('=') ? TokenType.NEQ : TokenType.LOG_NOT);
@@ -108,16 +108,16 @@ public class Lexer {
             case '"' -> stringLiteral();
             case '\'' -> charLiteral();
 
-            // --- AT_TYPE ---
+
             case '@' -> atType();
 
-            // --- novi red / beline ---
+
             case '\n' -> tokens.add(new Token(
                     TokenType.NEWLINE, "\n", null,
                     sc.getStartLine(), sc.getStartCol(), sc.getStartCol()
             ));
 
-            case ' ', '\r', '\t' -> { /* skip */ }
+            case ' ', '\r', '\t' -> {  }
 
             default -> {
                 if (Character.isDigit(c)) {
@@ -131,7 +131,7 @@ public class Lexer {
         }
     }
 
-    // --- @type@ ---
+
     private void atType() {
         int line = sc.getStartLine();
         int col = sc.getStartCol();
@@ -208,7 +208,7 @@ public class Lexer {
 
         if (sc.isAtEnd()) throw error("Unterminated string literal");
 
-        sc.advance(); // closing "
+        sc.advance();
 
         tokens.add(new Token(
                 TokenType.STRING_LIT,
@@ -228,7 +228,7 @@ public class Lexer {
         if (sc.peek() != '\'')
         throw error("Expected closing ' in char literal");
 
-        sc.advance(); // closing '
+        sc.advance();
 
         tokens.add(new Token(
                 TokenType.CHAR_LIT,

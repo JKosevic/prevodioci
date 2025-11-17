@@ -1,0 +1,8 @@
+battle() #
+    brojElixira x = 2;
+    imeKartice s = "Pozdrav";
+    x = x + 3;
+    ispisiKarticu(s);
+    ucitajKarticu(x);
+    krajBorbe;
+$

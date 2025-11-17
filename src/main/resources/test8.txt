@@ -1,0 +1,15 @@
+battle() #
+    brojElixira a = 2;
+    brojElixira b = 3;
+    brojElixira c = 4;
+
+    brojElixira r1 = a + b * c;
+    brojElixira r2 = (a + b) * c;
+    brojElixira r3 = a * b % c;
+
+    ucitajKarticu(r1);
+    ucitajKarticu(r2);
+    ucitajKarticu(r3);
+
+    krajBorbe;
+$

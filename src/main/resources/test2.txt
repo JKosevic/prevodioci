@@ -1,0 +1,18 @@
+battle() #
+    brojElixira a = 4;
+    brojElixira b = 7;
+
+    leader(a < b) #
+        leader(b > 5) #
+            ispisiKarticu("b>5");
+        $
+        member #
+            ispisiKarticu("b<=5");
+        $
+    $
+    member #
+        ispisiKarticu("a>=b");
+    $
+
+    krajBorbe;
+$

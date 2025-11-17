@@ -1,0 +1,5 @@
+battle() #
+    brojElixira x = 5
+    ucitajKarticu(x);
+    krajBorbe;
+$

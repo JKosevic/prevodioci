@@ -1,0 +1,6 @@
+battle() #
+    member #
+        ispisiKarticu("ne sme");
+    $
+    krajBorbe;
+$

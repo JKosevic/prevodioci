@@ -1,0 +1,16 @@
+@bezElixira@ tick() #
+
+    krajBorbe;
+$
+
+battle() #
+    brojElixira i = 0;
+    brojElixira sum = 0;
+
+    cycle(i = 0 ; i < 3 ; tick()) #
+        sum = sum + 2;
+    $
+
+    ucitajKarticu(sum);
+    krajBorbe;
+$

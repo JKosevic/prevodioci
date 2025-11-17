@@ -1,0 +1,9 @@
+battle() #
+    brojElixira i = 1;
+    brojElixira j = 2;
+
+    m[i] = 10;
+    m[i + 1] = 20;
+
+    krajBorbe;
+$

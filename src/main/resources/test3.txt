@@ -1,0 +1,21 @@
+@bezElixira@ loguj(imeKartice msg) #
+    ispisiKarticu(msg);
+    krajBorbe;
+$
+
+@brojElixira@ max2(brojElixira x, brojElixira y) #
+    leader(x >= y) #
+        krajBorbe x;
+    $
+    member #
+        krajBorbe y;
+    $
+$
+
+battle() #
+    brojElixira r = max2(10, 12);
+    loguj("rez=");
+
+    ucitajKarticu(r);
+    krajBorbe;
+$
